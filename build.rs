@@ -1264,47 +1264,6 @@ fn main() {
         }
     };
 
-    if statik
-        && matches!(
-            env::var("CARGO_CFG_TARGET_OS").as_deref(),
-            Ok("macos") | Ok("ios") | Ok("tvos")
-        )
-    {
-        let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
-
-        // Frameworks available on all Apple platforms (macOS, iOS, tvOS)
-        let frameworks = vec![
-            "AudioToolbox",
-            "AVFoundation",
-            "CoreFoundation",
-            "CoreGraphics",
-            "CoreMedia",
-            "CoreServices",
-            "CoreVideo",
-            "Foundation",
-            "QuartzCore",
-            "Security",
-            "VideoToolbox",
-        ];
-        for f in &frameworks {
-            println!("cargo:rustc-link-lib=framework={f}");
-        }
-
-        // Frameworks only available on macOS
-        if target_os == "macos" {
-            let macos_frameworks = vec![
-                "AppKit",
-                "OpenCL",
-                "OpenGL",
-                "QTKit",
-                "VideoDecodeAcceleration",
-            ];
-            for f in &macos_frameworks {
-                println!("cargo:rustc-link-lib=framework={f}");
-            }
-        }
-    }
-
     check_features(
         include_paths.clone(),
         &[

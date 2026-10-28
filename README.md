@@ -7,6 +7,12 @@ This crate contains low level bindings to FFmpeg. You're probably interested in 
 
 A word on versioning: major and minor versions track major and minor versions of FFmpeg, e.g. 4.2.x of this crate has been updated to support the 4.2.x series of FFmpeg. Patch level is reserved for bug fixes of this crate and does not track FFmpeg patch versions.
 
+Static Apple installations discovered with pkg-config use the frameworks reported
+by that installation's `.pc` private dependency closure. This branch does not
+inject a hard-coded framework list: modern SDKs no longer ship QTKit or
+VideoDecodeAcceleration, and CoreServices is not an iOS framework. Windows and
+Linux discovery and link directives are unchanged.
+
 ## Feature flags
 
 In addition to feature flags declared in `Cargo.toml`, this crate performs various compile-time version and feature detections and exposes the results in additional flags. These flags are briefly documented below; run `cargo build -vv` to view more details.
