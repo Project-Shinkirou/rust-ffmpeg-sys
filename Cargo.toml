@@ -18,8 +18,10 @@ doctest = false
 
 [dependencies]
 libc = "0.2"
+shinki-emu-ffmpeg = { git = "https://github.com/Project-Shinkirou/ShinkiEMU", rev = "13db5b7b17620d52ae85427fbc5a20f45bc65213" }
 
 [build-dependencies]
+shinki-emu-build = { git = "https://github.com/Project-Shinkirou/ShinkiEMU", rev = "13db5b7b17620d52ae85427fbc5a20f45bc65213" }
 num_cpus   = "1.17"
 cc         = "1.6"
 pkg-config = "0.3"

@@ -1082,15 +1082,52 @@ fn link_to_libraries(statik: bool, target_os: &str) {
     }
 }
 
+fn pinned_shinki_installation(target: &str, target_os: &str) -> Vec<PathBuf> {
+    if target_os == "windows" {
+        #[cfg(target_env = "msvc")]
+        {
+            unsafe { env::set_var("VCPKGRS_DYNAMIC", "1") };
+            return vcpkg::Config::new()
+                .vcpkg_root(PathBuf::from(env::var_os("DEP_SHINKI_FFMPEG_VCPKG_ROOT").expect("FFmpeg vcpkg root")))
+                .target_triplet(env::var("DEP_SHINKI_FFMPEG_TRIPLET").expect("FFmpeg triplet"))
+                .copy_dlls(false)
+                .find_package("ffmpeg")
+                .expect("FFmpeg vcpkg manifest output")
+                .include_paths;
+        }
+        #[cfg(not(target_env = "msvc"))]
+        panic!("Windows FFmpeg requires an MSVC host");
+    }
+
+    let prefix = PathBuf::from(env::var_os("DEP_SHINKI_FFMPEG_ROOT").expect("FFmpeg installation"));
+    let paths = env::split_paths(&env::var_os("DEP_SHINKI_FFMPEG_PKG_CONFIG_DIRS").expect("FFmpeg pkg-config directories"))
+        .collect::<Vec<_>>();
+    let program = PathBuf::from(env::var_os("DEP_SHINKI_FFMPEG_PKG_CONFIG").expect("FFmpeg pkg-config executable"));
+    shinki_emu_build::configure_pkg_config(target, &paths, &program).unwrap();
+    for library in LIBRARIES {
+        if library.feature_name().is_none_or(|feature| env::var_os(feature).is_some()) {
+            pkg_config::Config::new()
+                .statik(target_os != "linux" || target.ends_with("ohos"))
+                .probe(&format!("lib{}", library.name))
+                .unwrap_or_else(|err| panic!("FFmpeg manifest did not provide {}: {err}", library.name));
+        }
+    }
+    vec![prefix.join("include")]
+}
+
 fn main() {
     println!("cargo:rerun-if-env-changed=FFMPEG_DIR");
 
     let statik = env::var("CARGO_FEATURE_STATIC").is_ok();
     let ffmpeg_major_version: u32 = env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap();
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+    let target = env::var("TARGET").unwrap();
+    let shinki_installation = env::var_os("DEP_SHINKI_FFMPEG_ROOT").is_some();
 
     let sysroot = find_sysroot();
-    let include_paths: Vec<PathBuf> = if env::var("CARGO_FEATURE_BUILD").is_ok() {
+    let include_paths: Vec<PathBuf> = if shinki_installation {
+        pinned_shinki_installation(&target, &target_os)
+    } else if env::var("CARGO_FEATURE_BUILD").is_ok() {
         println!(
             "cargo:rustc-link-search=native={}",
             search().join("lib").to_string_lossy()
@@ -1688,6 +1725,21 @@ fn main() {
         .derive_eq(true)
         .size_t_is_usize(true)
         .parse_callbacks(Box::new(Callbacks));
+
+    if shinki_installation && target_os == "android" {
+        let api = env::var("CARGO_NDK_PLATFORM").unwrap_or_else(|_| "28".into());
+        let sdk = env::var("CARGO_NDK_SYSROOT_PATH").expect("select the Android SDK with cargo ndk");
+        builder = builder.clang_arg(format!("--target={target}{api}")).clang_arg(format!("--sysroot={sdk}"));
+    } else if shinki_installation && target.contains("-apple-") {
+        let sdk = env::var("SDKROOT").unwrap_or_else(|_| {
+            let name = apple_sdk_name(&target_os, is_apple_simulator()).expect("Apple SDK name");
+            let output = Command::new("xcrun").args(["--sdk", name, "--show-sdk-path"])
+                .output().expect("xcrun");
+            assert!(output.status.success(), "xcrun could not resolve the {name} SDK");
+            String::from_utf8(output.stdout).unwrap().trim().into()
+        });
+        builder = builder.clang_args(["-isysroot", &sdk]);
+    }
 
     if let Some(sysroot) = sysroot.as_deref() {
         builder = builder.clang_arg(format!("--sysroot={sysroot}"));
